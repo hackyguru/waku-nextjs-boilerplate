@@ -1,5 +1,7 @@
 # Waku NextJS Boilerplate
 
+![screenshot](public/screenshot.png)
+
 This is a simple boilerplate for NextJS that demonstrates sending and receiving data with [Waku](https://waku.org). The protocols used in this boilerplate are : 
     - LightPush (sending data to a content topic)
     - Filter (retrieving data by subscribing to a content topic)
