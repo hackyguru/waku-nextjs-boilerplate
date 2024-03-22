@@ -1,118 +1,161 @@
-import Image from "next/image";
-import { Inter } from "next/font/google";
+import { useEffect, useState } from "react";
 
-const inter = Inter({ subsets: ["latin"] });
+// Icon Imports
+import { FaGithub } from "react-icons/fa";
+
+
+// Waku Imports
+import { createLightNode } from "@waku/sdk";
+import { waitForRemotePeer } from "@waku/sdk";
+import { createEncoder, createDecoder } from "@waku/sdk";
+
+// Protobuf Import
+import protobuf from "protobufjs";
 
 export default function Home() {
+  const [node, setNode] = useState(null)
+  const [peers, setPeers] = useState(false)
+  const [encoders, setEncoders] = useState(null)
+  const [decoders, setDecoders] = useState(null)
+  const [error, setErrror] = useState(null)
+  const [receivedData, setReceivedData] = useState(null)
+  const [sendingData, setSendingData] = useState(null)
+
+
+  // Choose a content topic
+  const contentTopic = "/light-guide/1/message/proto";
+
+  // Create a message structure using Protobuf
+  const ChatMessage = new protobuf.Type("ChatMessage")
+    .add(new protobuf.Field("timestamp", 1, "uint64"))
+    .add(new protobuf.Field("data", 2, "string"));
+
+
+  async function sendData() {
+
+    if (node && peers && encoders && decoders) {
+
+      // Create a new message object
+      const protoMessage = ChatMessage.create({
+        timestamp: Date.now(),
+        data: sendingData,
+      });
+
+      // Serialise the message using Protobuf
+      const serialisedMessage = ChatMessage.encode(protoMessage).finish();
+
+      // Send the message using Light Push
+      await node.lightPush.send(encoders, {
+        payload: serialisedMessage,
+      });
+
+      console.log("Message sent!!!!", serialisedMessage)
+    }
+    else {
+      setErrror("Requirements not ready!")
+      console.log(error)
+    }
+  }
+
+  useEffect(() => {
+    const setupNode = async () => {
+
+      // Create and start a Light Node
+      const node = await createLightNode({ defaultBootstrap: true });
+      await node.start();
+      setNode(node);
+      console.log("Node started!")
+
+      // Wait for a successful peer connection
+      await waitForRemotePeer(node);
+      setPeers(true)
+      console.log("Remote peers connected!")
+
+      // Create a message encoder and decoder
+      const encoder = createEncoder({
+        contentTopic: contentTopic, // message content topic
+        ephemeral: true, // allows messages not be stored on the network
+      });
+      setEncoders(encoder)
+      const decoder = createDecoder(contentTopic);
+      setDecoders(decoder)
+
+      // Create the callback function
+      const callback = async (wakuMessage) => {
+        // Check if there is a payload on the message
+        if (!wakuMessage.payload) return;
+        // Render the messageObj as desired in your application
+        const messageObj = await ChatMessage.decode(wakuMessage.payload);
+        setReceivedData(messageObj);
+        console.log(receivedData);
+      };
+
+      // Create a Filter subscription
+      const subscription = await node.filter.createSubscription();
+
+      // Subscribe to content topics and process new messages
+      await subscription.subscribe([decoder], callback);
+    }
+
+
+    setupNode();
+  }, []);
+
   return (
-    <main
-      className={`flex min-h-screen flex-col items-center justify-between p-24 ${inter.className}`}
-    >
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">pages/index.js</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+    <>
+      <header className="flex justify-between items-center p-5">
+        <h1 className="text-xl">Waku NextJS Boilerplate</h1>
+        <a className="https://github.com/hackyguru/waku-nextjs-boilerplate">
+        <FaGithub size={20} />
+        </a>
+      </header>
+      <main className="text-center mt-40 flex-col space-y-5">
+        <div className="border border-white w-full flex text-start">
+          <div className="w-1/6  border-r p-5">Step 1</div>
+          <div className="w-4/6  border-r p-5">Create Light Node</div>
+          <div className="w-1/6  p-5">
+            {node ? <div className="text-green-300">Completed</div> : <div className="animate-pulse">Pending</ div>}</div>
         </div>
-      </div>
 
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-full sm:before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full sm:after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700/10 after:dark:from-sky-900 after:dark:via-[#0141ff]/40 before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
+        <div className="border border-white w-full flex text-start">
+          <div className="w-1/6  border-r p-5">Step 2</div>
+          <div className="w-4/6  border-r p-5">Discover peers around you</div>
+          <div className="w-1/6  p-5">
+            {peers ? <div className="text-green-300">Completed</div> : <div className="animate-pulse">Pending</ div>}</div>
+        </div>
 
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
+        <div className="border border-white w-full flex text-start">
+          <div className="w-1/6  border-r p-5">Step 3</div>
+          <div className="w-4/6  border-r p-5">Setup encoders and decoders</div>
+          <div className="w-1/6  p-5">
+            {encoders && decoders ? <div className="text-green-300">Completed</div> : <div className="animate-pulse">Pending</ div>}</div>
+        </div>
 
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
 
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Discover and deploy boilerplate example Next.js&nbsp;projects.
-          </p>
-        </a>
+        <div className="border border-white w-full flex text-start">
+          <div className="w-1/2 border-r border-white">
+            <div className="border-b border-white p-5">Send data to a content topic</div>
+            <div className="p-5">
+              <div className="flex w-full justify-between space-x-3">
+                <input onChange={(e) => setSendingData(e.target.value)} placeholder="Data" className="w-full bg-transparent px-4 border" />
+                <button onClick={() => sendData()} className="bg-white text-black p-2 border-l border-black">Send</button>
+              </div>
+            </div>
+          </div>
 
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50 text-balance`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
+          <div className="w-1/2 border-r border-white">
+            <div className="border-b border-white p-5">Receive data from a content topic</div>
+            <div className="p-5">
+              <div className="w-full border border-white p-2">
+                {
+                  receivedData != null ? <div>{receivedData.data}</div> :
+                    <div className="opacity-60">Received data will be automatically shown here</div>
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </>
   );
 }
