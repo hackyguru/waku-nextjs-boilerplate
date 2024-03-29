@@ -6,7 +6,7 @@ import { FaGithub } from "react-icons/fa";
 
 // Waku Imports
 import { createLightNode } from "@waku/sdk";
-import { waitForRemotePeer } from "@waku/sdk";
+import { waitForRemotePeer, Protocols } from "@waku/sdk";
 import { createEncoder, createDecoder } from "@waku/sdk";
 
 // Protobuf Import
@@ -67,7 +67,7 @@ export default function Home() {
       console.log("Node started!")
 
       // Wait for a successful peer connection
-      await waitForRemotePeer(node);
+      await waitForRemotePeer(node, [Protocols.Store]);
       setPeers(true)
       console.log("Remote peers connected!")
 
@@ -81,20 +81,17 @@ export default function Home() {
       setDecoders(decoder)
 
       // Create the callback function
-      const callback = async (wakuMessage) => {
-        // Check if there is a payload on the message
-        if (!wakuMessage.payload) return;
-        // Render the messageObj as desired in your application
-        const messageObj = await ChatMessage.decode(wakuMessage.payload);
-        setReceivedData(messageObj);
-        console.log(receivedData);
+      const callback = (wakuMessage) => {
+        setReceivedData(wakuMessage);
+        console.log(wakuMessage);
       };
 
-      // Create a Filter subscription
-      const subscription = await node.filter.createSubscription();
+      // Query the Store peer
+      await node.store.queryWithOrderedCallback(
+        [decoder],
+        callback,
+      );
 
-      // Subscribe to content topics and process new messages
-      await subscription.subscribe([decoder], callback);
     }
 
 
@@ -106,7 +103,7 @@ export default function Home() {
       <header className="flex justify-between items-center p-5">
         <h1 className="text-xl">Waku NextJS Boilerplate</h1>
         <a className="https://github.com/hackyguru/waku-nextjs-boilerplate">
-        <FaGithub size={20} />
+          <FaGithub size={20} />
         </a>
       </header>
       <main className="text-center mt-40 flex-col space-y-5">
